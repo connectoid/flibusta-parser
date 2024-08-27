@@ -44,7 +44,11 @@ def get_books(url):
             items = li_book.find_all('a')
             if len(items) > 1:
                 count += 1
-                book['title'] = items[1].text.replace('[litres]', '').replace('(СИ)', '').strip()
+                title = items[1].text.replace('[litres]', '').replace('(СИ)', '').strip()
+                if check_is_title_exists(title):
+                    print(f'Книга {title} уже добавлена, пропускаем.')
+                    continue
+                book['title'] = title
                 book['authors'] = [items[0].text]
                 book['url'] = base_url + items[1]['href']
             book_extended = get_one_book(book['url'])
@@ -95,8 +99,17 @@ def get_one_book(url):
             book['series'] = series[0]
         fb2_links = [base_url + link['href'] for link in all_links if link.text == '(fb2)']
         epub_links = [base_url + link['href'] for link in all_links if link.text == '(epub)']
-        book['fb2_link'] = fb2_links[0]
-        book['epub_link'] = epub_links[0]
+        try:
+            book['fb2_link'] = fb2_links[0]
+        except:
+            book['fb2_link'] = ''
+            print('Отсутствует ссылка на загрузку fb2')
+        try:
+            book['epub_link'] = epub_links[0]
+        except:
+            book['epub_link'] = ''
+            print('Отсутствует ссылка на загрузку epub')
+        
         return book
     
         # if len(all_links) != 0:
@@ -117,69 +130,65 @@ count = 0
 for book in books:
     if count >= 3:
         break
-    if not check_is_title_exists(book['title']):
-        slug_title = slugify_title(book['title'])
-        fb2_book_filename = download_file(book['fb2_link'], books_dir, slug_title)
-        fb2_file_size = os.path.getsize(f'{books_dir}/{fb2_book_filename}')
-        if fb2_file_size < MIN_FB2_SIZE:
-            print('Файл слишком маленький, пропускаем')
-            continue
-        epub_book_filename = download_epub_file(book['epub_link'], books_dir, slug_title)
-        cover_filename = download_cover(book['cover'], covers_dir, slug_title)
-        pdf_book_filename = convert_fb2_to_pdf(fb2_book_filename, books_dir)
+    slug_title = slugify_title(book['title'])
+    fb2_book_filename = download_file(book['fb2_link'], books_dir, slug_title)
+    fb2_file_size = os.path.getsize(f'{books_dir}/{fb2_book_filename}')
+    if fb2_file_size < MIN_FB2_SIZE:
+        print('Файл слишком маленький, пропускаем')
+        continue
+    epub_book_filename = download_epub_file(book['epub_link'], books_dir, slug_title)
+    cover_filename = download_cover(book['cover'], covers_dir, slug_title)
+    pdf_book_filename = convert_fb2_to_pdf(fb2_book_filename, books_dir)
 
 
-        # txt_filename = extract_txt_from_fb2(fb2_book_filename, books_dir)
-        if get_file_size(pdf_book_filename, books_dir) > MAX_PDF_SIZE:
-            print(f'Файл {pdf_book_filename} слишком большой, пропускаем')
-            continue
-        if not cover_filename:
-            cover_filename = default_picture_filename
-            shutil.copy(cover_filename, covers_dir)
-        description, genres_names, genres_ids = get_description(pdf_book_filename, books_dir)
+    # txt_filename = extract_txt_from_fb2(fb2_book_filename, books_dir)
+    if get_file_size(pdf_book_filename, books_dir) > MAX_PDF_SIZE:
+        print(f'Файл {pdf_book_filename} слишком большой, пропускаем')
+        continue
+    if not cover_filename:
+        cover_filename = default_picture_filename
+        shutil.copy(cover_filename, covers_dir)
+    description, genres_names, genres_ids = get_description(pdf_book_filename, books_dir)
 
-        if description and genres_names and genres_ids:
-            print(f'Genres IDS: {genres_ids}')
-            genres_urls = [get_category_link_by_id(id) for id in genres_ids]
-            genres_dict = dict(zip(genres_names, genres_urls))
-            genres = [f'<a href=\"{genres_dict[genre]}">{genre}</a>' for genre in genres_dict]
-            book['genres'] = genres[:3]
-            book['content'] = f'[xyz-ips snippet="Card"]\n<h2>Содержание книги</h2>\n{description}'
-            book['categories'] = genres_ids
-            authors_ids, authors_urls, author_slug = get_or_create_tag(book['authors'])
-            book['tags'] = authors_ids
-            authors_dict = dict(zip(book['authors'], authors_urls))
-            authors = [f'<a href=\"{authors_dict[book]}">{book}</a>' for book in authors_dict]
-            book['acf_series'] = ''
-            if book['series']:
-                series_name = book['series']
-                series_id, series_url = get_or_create_series(series_name)
-                book['categories'].append(series_id)
-                series = f'<a href=\"{series_url}">{series_name}</a>'
-                book['acf_series'] = series
-            book['authors'] = authors
-            book['avtor'] = ', '.join(book['authors'])
-            book['yazyk'] = 'Русский'
-            book['year'] = '2024'
-            book['featured_media'] = upload_media(cover_filename, covers_dir)
-            book['choose_file_fb2'] = upload_book(fb2_book_filename, books_dir)
-            book['choose_file_epub'] = upload_book(epub_book_filename, books_dir)
-            title_slug  = extract_title_slug_from_fb2(fb2_book_filename, books_dir)
-            if not title_slug:
-                print(f'Не найдено название книги в мета тегах FB2. Пропускаем.')
-                continue
-            reedon_link = f'https://electrobook.ru/read/{title_slug}'
-            book['reedon_link'] = reedon_link
-            count += 1
-            id, book_slug = create_post(book)
-            add_title_to_db(book['title'])
-            delete_all_files_in_directory(books_dir)
-            delete_all_files_in_directory(covers_dir)
-        else:
-            print(f'Описание и жанр не получены, возможно закончилась подписка на ChatPDF')
-            # count += 1
-            # add_title_to_db(book['title'])
+    if description and genres_names and genres_ids:
+        print(f'Genres IDS: {genres_ids}')
+        genres_urls = [get_category_link_by_id(id) for id in genres_ids]
+        genres_dict = dict(zip(genres_names, genres_urls))
+        genres = [f'<a href=\"{genres_dict[genre]}">{genre}</a>' for genre in genres_dict]
+        book['genres'] = genres[:3]
+        book['content'] = f'[xyz-ips snippet="Card"]\n<h2>Содержание книги</h2>\n{description}'
+        book['categories'] = genres_ids
+        authors_ids, authors_urls, author_slug = get_or_create_tag(book['authors'])
+        book['tags'] = authors_ids
+        authors_dict = dict(zip(book['authors'], authors_urls))
+        authors = [f'<a href=\"{authors_dict[book]}">{book}</a>' for book in authors_dict]
+        book['acf_series'] = ''
+        if book['series']:
+            series_name = book['series']
+            series_id, series_url = get_or_create_series(series_name)
+            book['categories'].append(series_id)
+            series = f'<a href=\"{series_url}">{series_name}</a>'
+            book['acf_series'] = series
+        book['authors'] = authors
+        book['avtor'] = ', '.join(book['authors'])
+        book['yazyk'] = 'Русский'
+        book['year'] = '2024'
+        book['featured_media'] = upload_media(cover_filename, covers_dir)
+        book['choose_file_fb2'] = upload_book(fb2_book_filename, books_dir)
+        book['choose_file_epub'] = upload_book(epub_book_filename, books_dir)
+        title_slug  = extract_title_slug_from_fb2(fb2_book_filename, books_dir)
+        if not title_slug:
+            print(f'Не найдено название книги в мета тегах FB2. Пропускаем.')
             continue
+        reedon_link = f'https://electrobook.ru/read/{title_slug}'
+        book['reedon_link'] = reedon_link
+        count += 1
+        id, book_slug = create_post(book)
+        add_title_to_db(book['title'])
+        delete_all_files_in_directory(books_dir)
+        delete_all_files_in_directory(covers_dir)
     else:
-        title = book['title']
-        print(f'Книга {title} уже добавлена, пропускаем.')
+        print(f'Описание и жанр не получены, возможно закончилась подписка на ChatPDF')
+        # count += 1
+        # add_title_to_db(book['title'])
+        continue
