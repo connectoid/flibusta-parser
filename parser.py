@@ -130,6 +130,9 @@ count = 0
 for book in books:
     if count >= 3:
         break
+    if not book['fb2_link'] or not book['epub_link']:
+        print('Отсутствуют ссылки на fb2 или epub. Пропускаем')
+        continue
     slug_title = slugify_title(book['title'])
     fb2_book_filename = download_file(book['fb2_link'], books_dir, slug_title)
     fb2_file_size = os.path.getsize(f'{books_dir}/{fb2_book_filename}')
