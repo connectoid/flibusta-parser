@@ -44,7 +44,7 @@ def get_books(url):
             items = li_book.find_all('a')
             if len(items) > 1:
                 count += 1
-                title = items[1].text.replace('[litres]', '').replace('(СИ)', '').strip()
+                title = items[1].text.replace('[litres]', '').replace('[СИ]', '').replace('[СИ litres]', '').replace('[сборник litres]', '').replace('[АТ]', '').strip()
                 if check_is_title_exists(title):
                     print(f'Книга {title} уже добавлена, пропускаем.')
                     continue
