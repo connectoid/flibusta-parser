@@ -58,8 +58,8 @@ def get_books(url):
                 books.append(book)
                 title = book['title']
                 print(f'{count}. Book {title} added')
-                if count == 3:
-                    break
+                # if count == 3:
+                #     break
             else:
                 continue
         return books
@@ -113,9 +113,11 @@ def get_one_book(url):
 
 init_env()
 books = get_books(search_url)
+count = 0
 for book in books:
+    if count >= 3:
+        break
     if not check_is_title_exists(book['title']):
-        count = 0
         slug_title = slugify_title(book['title'])
         fb2_book_filename = download_file(book['fb2_link'], books_dir, slug_title)
         fb2_file_size = os.path.getsize(f'{books_dir}/{fb2_book_filename}')
@@ -175,7 +177,7 @@ for book in books:
             delete_all_files_in_directory(covers_dir)
         else:
             print(f'Описание и жанр не получены, возможно закончилась подписка на ChatPDF')
-            count += 1
+            # count += 1
             # add_title_to_db(book['title'])
             continue
     else:
